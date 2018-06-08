@@ -1,54 +1,13 @@
 from os.path import basename, splitext
 import numpy as np
 import glob
-import math
 import matplotlib.pyplot as plt
 import csv
+from tqdm import tqdm
 
-from utils import sort_nicely
+from utils import sort_nicely, isNAN
+from bbox_utils import *
 
-
-def isNAN(bbox):
-    for value in bbox.flatten():
-        if math.isnan(value):
-            return True
-
-def interval_overlap(interval_a, interval_b):
-    x1, x2 = interval_a
-    x3, x4 = interval_b
-
-    if x3 < x1:
-        if x4 < x1:
-            return 0
-        else:
-            return min(x2,x4) - x1
-    else:
-        if x2 < x3:
-            return 0
-        else:
-            return min(x2,x4) - x3  
-
-def bbox_iou(box1, box2):
-    """ Compute IOU between two bboxes in the form [x1,y1,w,h]
-    """
-    x1_min = box1[0]
-    x1_max = x1_min + box1[2]
-    y1_min = box1[1]
-    y1_max = y1_min + box1[3]
-
-    x2_min = box2[0]
-    x2_max = x2_min + box2[2]
-    y2_min = box2[1]
-    y2_max = y2_min + box2[3]
-
-    intersect_w = interval_overlap([x1_min, x1_max], [x2_min, x2_max])
-    intersect_h = interval_overlap([y1_min, y1_max], [y2_min, y2_max])
-    
-    intersect = intersect_w * intersect_h
-    
-    union = box1[2] * box1[3] + box2[2] * box2[3] - intersect
-    
-    return float(intersect) / union
 
 def average_IOU(annots, trks, file_name):
     nb_video = len(annots)
@@ -61,10 +20,10 @@ def average_IOU(annots, trks, file_name):
     for i, annot in enumerate(annots):
         if basename(annot)[:-4] != basename(trks[i])[:-4]:
             print("Annotations:", annot)
-            print("Output:", trks)
+            print("Output:", trks[i])
             raise ValueError("Wrong annotation and track correspondence.")
 
-        print("Evaluating %s." % basename(annot))
+        print("Evaluating %s." % basename(annot)[:-4])
 
         labels = np.loadtxt(annot, delimiter=',')
         preds = np.loadtxt(trks[i], delimiter=',')
@@ -119,10 +78,126 @@ def average_IOU(annots, trks, file_name):
     return total_avg_iou, total_lost
 
 
-def overlap_precision(annots, trks, threshold, isMOTformat):
-    nb_video = len(annots)
+def average_tracked_ratio(ann, trk_results, isMOTformat, filename):
+    nb_video = len(ann)
+    total_atr = 0.0
+    data = []
+    data.append(["video", "tracked_ratio", "#frame"])
+    for i, annot in enumerate(tqdm(annots)):
+        video_name = basename(annot)[:-4]
+        if basename(annot)[:-4] != basename(trk_results[i])[:-4]:
+            print("Annotations:", annot)
+            print("Tracked result:", trk_results[i])
+            raise ValueError("Wrong annotation and track correspondence.")
+
+        # if video_name != "person22":
+            # continue
+
+        labels = np.loadtxt(annot, delimiter=',')
+        preds = np.loadtxt(trk_results[i], delimiter=',')
+
+        nb_frame = len(labels)
+
+        atr = 0.0
+        lose_frames = 0
+
+        for fi, label in enumerate(labels):
+            if fi == 0:
+                # Tracking start
+                if isMOTformat:
+                    target_identity = 1
+                    index_list = np.argwhere(preds[:, 0] == (fi+1))
+                    if index_list.shape[0] != 0:
+                        max_intersection = 0.0 
+                        for index in index_list[:, 0]:
+                            bbox = preds[index, 2:6]
+                            intersect = bbox_intersection(bbox, label)
+                            if intersect > max_intersection:
+                                max_intersection = intersect
+                                target_pred = bbox
+                                target_identity = preds[index, 1]
+                continue
+            if isNAN(labels[fi]):
+                # No target in this frame
+                continue
+
+            if isMOTformat:
+                index_list = np.argwhere(preds[:, 0] == (fi+1))
+                if index_list.shape[0] != 0:
+                    # Only consider maximum IoU
+                    # max_intersection = 0.0 
+                    # for index in index_list[:, 0]:
+                    #     bbox = preds[index, 2:6]
+                    #     intersect = bbox_intersection(bbox, label)
+                    #     if intersect > max_intersection:
+                    #         max_intersection = intersect
+                    #         target_pred = bbox
+                    # cover_rate = max_intersection/bbox_area(label)
+                    # magnification = bbox_area(target_pred)/bbox_area(label)
+                    # position_error = bbox_distance(target_pred, label)
+                    # if (cover_rate>0.6 and magnification<2 and position_error<15) or (cover_rate>0.7 and magnification<8 and position_error<25):
+                    #         lose_frames = 0
+                    #         atr += 1
+                    # else:
+                    #     lose_frames += 1
+
+                    # Consider right identity
+                    for index in index_list[:, 0]:
+                        if preds[index, 1] == target_identity:
+                            target_pred = preds[index, 2:6]
+                            intersect = bbox_intersection(target_pred, label)
+                            cover_rate = intersect/bbox_area(label)
+                            magnification = bbox_area(target_pred)/bbox_area(label)
+                            position_error = bbox_distance(target_pred, label)
+                            if (cover_rate>0.5 and magnification<3 and position_error<15) or (cover_rate>0.7 and magnification<8 and position_error<30):
+                                lose_frames = 0
+                                atr += 1
+                            else:
+                                lose_frames += 1
+                else:
+                    # print("Lost frame:", fi+1)
+                    lose_frames += 1
+            else:
+                intersect = bbox_intersection(preds[fi], label)
+                cover_rate = intersect/bbox_area(label)
+                magnification = bbox_area(preds[fi])/bbox_area(label)
+                position_error = bbox_distance(preds[fi], label)
+                if (cover_rate>0.5 and magnification<3 and position_error<15) or (cover_rate>0.7 and magnification<8 and position_error<30):
+                    lose_frames = 0
+                    atr += 1
+                else:
+                    lose_frames += 1
+
+            # if lose_frames > 30:
+            #     # Consecutively losing tracks for more than some threshold
+            #     break
+        atr /= (nb_frame - 1)
+        data.append([splitext(basename(annot))[0], "{:.2f}%".format(atr * 100), nb_frame])
+        total_atr += atr
+
+    with open('tracked_ratio/' + filename + '.csv', "w") as f:
+        w = csv.writer(f)
+        w.writerows(data)
+    
+    total_atr /= nb_video
+    
+    return total_atr
+
+def ATR(ann, trk_results, trk_names):
+    print("Average tracked ratio:")
+    for trk_r, trk_name in zip(trk_results, trk_names):
+        if trk_name.find('SORT') != -1:
+            isMOTformat = True
+        else:
+            isMOTformat = False
+        atr = average_tracked_ratio(ann, trk_r, isMOTformat, trk_name)
+        print('{:.3f}%'.format(atr*100), trk_name)
+
+
+def overlap_precision(ann, trks, threshold, isMOTformat):
+    nb_video = len(ann)
     total_precision = 0.0
-    for i, annot in enumerate(annots):
+    for i, annot in enumerate(ann):
         if basename(annot)[:-4] != basename(trks[i])[:-4]:
             raise ValueError("Wrong annotation and track correspondence.")
 
@@ -170,18 +245,24 @@ def overlap_precision(annots, trks, threshold, isMOTformat):
     return total_precision
 
 
-def success_plot_auc(ann, trackers, trk_names):
+def success_plot_auc(ann, trk_results, trk_names):
+    """ Draw success plot.
+        Arguments:
+            ann: a list of paths to all the video annotations
+            trk_results: a list of paths to all the video tracked results
+            trk_names: a list of names to each tracker
+    """
     fig = plt.figure("Success plot")
     t = np.linspace(0.0, 1.0, 30)
     legends = []
-    for trk, trk_name in zip(trackers, trk_names):
+    for trk_r, trk_name in zip(trk_results, trk_names):
         s = np.zeros_like(t)
         for i, threshold in enumerate(t):
             if trk_name.find('SORT') != -1:
                 isMOTformat = True
             else:
                 isMOTformat = False
-            s[i] = overlap_precision(ann, trk, threshold, isMOTformat)
+            s[i] = overlap_precision(ann, trk_r, threshold, isMOTformat)
         plt.plot(t, s)
         auc_score = np.mean(s)
         legend_str = trk_name + " [{:.3f}]".format(auc_score)
@@ -196,6 +277,7 @@ def success_plot_auc(ann, trackers, trk_names):
 
     plt.savefig('comparison.png')
     plt.show()
+
 
 if __name__ == '__main__':
     data = {
@@ -219,6 +301,11 @@ if __name__ == '__main__':
     # print("Total average IOU = {}".format(total_avg_iou))
     # print("Total lost track  = {}".format(total_lost))
 
-    trk_names = ["DSST", "YOLOv3+SORT(KF)", "YOLOv3+SORT(UKF)"]
+    # trk_names = ["DSST", "YOLOv3+SORT(KF)", "YOLOv3+SORT(UKF)"]
+    trk_names = ["DSST", "YOLOv3+SORT"]
 
-    success_plot_auc(annots, [dsst_r, sort_r, ukf_r], trk_names)
+    # ATR(annots, [dsst_r], ["DSST"])
+    # ATR(annots, [dsst_r, sort_r, ukf_r], trk_names)
+    ATR(annots, [dsst_r, sort_r], trk_names)
+    
+    # success_plot_auc(annots, [dsst_r, sort_r, ukf_r], trk_names)

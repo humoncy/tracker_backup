@@ -1,8 +1,14 @@
 import os
 import glob
 import re
+import math
 from os.path import basename, splitext
 
+
+def isNAN(bbox):
+    for value in bbox.flatten():
+        if math.isnan(value):
+            return True
 
 def tryint(s):
     try:
