@@ -5,11 +5,15 @@ import math
 import numpy as np
 from os.path import basename, splitext
 from tqdm import tqdm
+import matplotlib.cm
 
 from utils import sort_nicely, get_data_lists, isNAN
 from bbox_utils import *
 
-colours = [(250,0,0), (0,250,0), (255,255,0), (255,0,255), (0,255,255)]
+cmap = matplotlib.cm.get_cmap('tab20')
+ci = np.linspace(0,1,20)
+colours = cmap(ci)[:,:3]
+colours = colours[:,::-1] * 255
 
 def demo(videos, annots, trk_results, isMotformat):
     video_id = 0
@@ -18,7 +22,7 @@ def demo(videos, annots, trk_results, isMotformat):
         if basename(annot).find(video_name) == -1:
             raise Exception("No corresding video and annotation!")
 
-        if video_name != "person14_2":
+        if video_name != "person14_1":
             video_id += 1
             continue
         print("Processing " + video_name)
@@ -44,24 +48,58 @@ def demo(videos, annots, trk_results, isMotformat):
                 if isMotformat[trk_id] is True:
                     index_list = np.argwhere(preds[:, 0] == (fi+1))
                     if index_list.shape[0] != 0:
+                        max_iou = 0.0
+                        target_index = -1
                         for index in index_list[:, 0]:
-                            if preds[index, 1] == 1:
-                                target_bbox = preds[index, 2:6]
-                                intersect = bbox_intersection(target_bbox, labels[fi])
-                            if (intersect/bbox_area(labels[fi])>0.8) and (bbox_area(target_bbox)/bbox_area(labels[fi])<8):
-                                target_bbox = xywh_to_xyxy(target_bbox)
-                                cv2.rectangle(image, 
-                                    (int(target_bbox[0]),int(target_bbox[1])), 
-                                    (int(target_bbox[2]),int(target_bbox[3])), 
-                                    colours[trk_id], 2)
+                            bbox = preds[index, 2:6]
+                            iou = bbox_iou(bbox, labels[fi])
+                            if iou > max_iou:
+                                max_iou = iou
+                                target_index = index
+                        if max_iou > 0.2 and target_index != -1:
+                            target_bbox = preds[target_index, 2:6]
+                            target_bbox = xywh_to_xyxy(target_bbox)
+                            cv2.rectangle(image, 
+                                (int(target_bbox[0]),int(target_bbox[1])), 
+                                (int(target_bbox[2]),int(target_bbox[3])), 
+                                colours[trk_id], 2)
+                            cv2.rectangle(image, 
+                                        (int(target_bbox[0])-2,int(target_bbox[1]-20)), 
+                                        (int(target_bbox[0])+20+int(preds[target_index, 1])//10 ,int(target_bbox[1])+1), 
+                                        colours[trk_id], -1)
+                            cv2.putText(image, 
+                                        str(int(preds[target_index, 1])), 
+                                        (int(target_bbox[0]+2), int(target_bbox[1])-3), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 
+                                        0.6, 
+                                        (0,0,0), 2)
                         else:
                             nb_lost += 1
+                elif isMotformat[trk_id] == 'DET':
+                    index_list = np.argwhere(preds[:, 0] == (fi+1))
+                    if index_list.shape[0] != 0:
+                        max_iou = 0.0
+                        target_index = -1
+                        for index in index_list[:, 0]:
+                            bbox = preds[index, 2:6]
+                            iou = bbox_iou(bbox, labels[fi])
+                            if iou > max_iou:
+                                max_iou = iou
+                                target_index = index
+                        if max_iou > 0.5 and target_index != -1:
+                            target_bbox = preds[target_index, 2:6]
+                            target_bbox = xywh_to_xyxy(target_bbox)
+                            cv2.rectangle(image, 
+                                (int(target_bbox[0]),int(target_bbox[1])), 
+                                (int(target_bbox[2]),int(target_bbox[3])), 
+                                colours[trk_id], 4)
                 else:
                     rect = xywh_to_xyxy(preds[fi])
                     cv2.rectangle(image, 
                         (int(rect[0]),int(rect[1])), 
                         (int(rect[2]),int(rect[3])), 
-                        colours[trk_id], 2)
+                        # (colours[trk_id]), 4)
+                        (255,0,0), 4)
 
             if isNAN(labels[fi]) is not True:
                 gt_rect = xywh_to_xyxy(labels[fi])
@@ -71,6 +109,10 @@ def demo(videos, annots, trk_results, isMotformat):
                     (0,0,255), 2)
 
             video_writer.write(image)
+            # dir_path = 'output_video/person14_1/'
+            # frame_name = "{0:0=3d}".format(fi) + ".jpg"
+            # cv2.imwrite(dir_path + frame_name, image)
+
         video_id += 1
 
     print("Lost target: {}".format(nb_lost))
@@ -82,7 +124,17 @@ if __name__ == '__main__':
         'annot_folder': '/home/peng/data/sort_data/annotations/',
         'dsst_tracked_results': '/home/peng/trackers/dsst_output/',
         'sort_tracked_results': '/home/peng/darknet/sort/kf_output/',
-        'ukf_tracked_results': '/home/peng/darknet/sort/output/'
+        'ukf_tracked_results': '/home/peng/darknet/sort/output/',
+        'reid_sort_results': '/home/peng/darknet/sort/reid_output/',
+        'reid_thr45_results': '/home/peng/darknet/sort/reid_thr45_output/',
+
+        # 'yolo2_sort_results': '/home/peng/basic-yolo-keras/sort/output/',
+        # 'y2_ridsort_results': '/home/peng/basic-yolo-keras/sort/reid_output/'
+        'yolo2_sort_results': '/home/peng/darknetv2/sort/output/',
+        'y2_ridsort_results': '/home/peng/darknetv2/sort/reid_output/',
+
+        'yolo2_det_results': '/home/peng/darknetv2/det_mot/',
+        'yolo3_det_results': '/home/peng/darknet/det_mot/'
     }
     annots, videos = get_data_lists(data)
 
@@ -90,10 +142,24 @@ if __name__ == '__main__':
     sort_nicely(dsst_r)
     sort_r = sorted(glob.glob((data['sort_tracked_results'] + "*")))
     sort_nicely(sort_r)
-    ukf_r = sorted(glob.glob((data['ukf_tracked_results'] + "*")))
-    sort_nicely(ukf_r)
+    # ukf_r = sorted(glob.glob((data['ukf_tracked_results'] + "*")))
+    # sort_nicely(ukf_r)
+    rid_sort_r = sorted(glob.glob((data['reid_sort_results'] + "*")))
+    sort_nicely(rid_sort_r)
+    # rid45_sort_r = sorted(glob.glob((data['reid_thr45_results'] + "*")))
+    # sort_nicely(rid45_sort_r)
+    y2_sort_r = sorted(glob.glob((data['yolo2_sort_results'] + "*")))
+    sort_nicely(y2_sort_r)
+
+    y2_ridsort_r = sorted(glob.glob((data['y2_ridsort_results'] + "*")))
+    sort_nicely(y2_ridsort_r)
+
+    yolo2_det_r = sorted(glob.glob((data['yolo2_det_results'] + "*")))
+    sort_nicely(yolo2_det_r)
+    yolo3_det_r = sorted(glob.glob((data['yolo3_det_results'] + "*")))
+    sort_nicely(yolo3_det_r)
 
     # demo(videos, annots, [dsst_r], [False])
-    # demo(videos, annots, [sort_r], [True])
-    demo(videos, annots, [dsst_r, sort_r], [False, True])
-    # demo(videos, annots, [dsst_r, sort_r, ukf_r], [False, True, True])
+    demo(videos, annots, [dsst_r, rid_sort_r], [False, True])
+    # demo(videos, annots, [dsst_r, sort_r], [False, True])
+    # demo(videos, annots, [yolo3_r, sort_r], ['DET', True])
