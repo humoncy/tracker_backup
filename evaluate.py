@@ -10,6 +10,8 @@ from tqdm import tqdm
 from utils import sort_nicely, isNAN
 from bbox_utils import *
 
+import config
+
 
 ###################################################################################
 ###################################################################################
@@ -479,32 +481,8 @@ def create_otb_results(ann, trk_results, trk_names):
 
 
 if __name__ == '__main__':
-    data = {
-        'image_folder': '/home/peng/data/sort_data/images/',
-        'annot_folder': '/home/peng/data/sort_data/annotations/',
-        'dsst_tracked_results': '/home/peng/trackers/uav_output/dsst_output/',
-        'ecohc_tracked_results': '/home/peng/trackers/uav_output/eco_hc_output/',
-        'eco_tracked_results': '/home/peng/trackers/uav_output/eco_output/',
-        're3_tracked_results': '/home/peng/trackers/uav_output/re3_output/',
-        'kcf_tracked_results': '/home/peng/trackers/uav_output/kcf_output/',
-        'deep_sort_results': '/home/peng/trackers/uav_output/deep_sort_output/',
-        'iou_traker_results': '/home/peng/trackers/uav_output/ioutrk_output/',
-        
-        'sort_tracked_results': '/home/peng/darknet/sort/kf_output/',
-        'ukf_tracked_results': '/home/peng/darknet/sort/output/',
-        'reid_sort_results': '/home/peng/darknet/sort/reid_output/',
-        'reid_thr45_results': '/home/peng/darknet/sort/reid_thr45_output/',
-
-        # 'yolo2_sort_results': '/home/peng/basic-yolo-keras/sort/output/',
-        # 'y2_ridsort_results': '/home/peng/basic-yolo-keras/sort/reid_output/'
-        'yolo2_sort_results': '/home/peng/darknetv2/sort/output/',
-        'y2_ridsort_results': '/home/peng/darknetv2/sort/reid_output/',
-
-        'yolo2_det_results': '/home/peng/darknetv2/det_mot/',
-        'y2_nft_det_results': '/home/peng/darknetv2/det_mot(before_ft)/',
-        'yolo3_det_results': '/home/peng/darknet/det_mot/',
-        'y3_nft_det_results': '/home/peng/darknet/det_mot(before_ft)/'
-    }
+    
+    data = config.data
 
     annots = sorted(glob.glob((data['annot_folder'] + "*")))
     sort_nicely(annots)
@@ -569,10 +547,10 @@ if __name__ == '__main__':
     
     # AOS(annots, [yolo2_det_r, yolo3_det_r, y2_sort_r, sort_r, y2_ridsort_r, rid_sort_r], names)
     # AOS(annots, results, names)
-    # AOS(annots, detectors_r, detector_n)
+    AOS(annots, detectors_r, detector_n)
     # AOS(annots, [trk_results, [trk_names)
 
     # success_plot_auc(annots, [yolo2_det_r, yolo3_det_r], det_names)
     # success_plot_auc(annots, [dsst_r, sort_r], trk_names)
 
-    create_otb_results(annots, trk_results, trk_names)
+    # create_otb_results(annots, trk_results, trk_names)

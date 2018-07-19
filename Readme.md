@@ -34,6 +34,11 @@ Draw many trackers' tracking results at the same time
 # Utilities
 *utils.py: nothing special
 
+# Path to data
+
+### config.py
+**Data paths are stored in this script, modify it when running on a new device**
+
 # Ohter diectory
 
 ### output_video/
