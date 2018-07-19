@@ -5,3 +5,9 @@
 *.txt
 *deep_sort*
 *.jpg
+*.mp4
+*.avi
+*iou-tracker*
+*KCFpy*
+*.json
+

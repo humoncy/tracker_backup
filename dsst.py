@@ -46,7 +46,7 @@ import matplotlib.pyplot as plt
 import time
 
 import dlib
-from utils import get_data_lists
+from utils import get_data_lists, sort_nicely
 
 def track(video, annot):
     # Create the correlation tracker - the object needs to be initialized
@@ -55,7 +55,9 @@ def track(video, annot):
 
     win = dlib.image_window()
     # We will track the frames as we load them off of disk
-    for k, f in enumerate(sorted(glob.glob(os.path.join(video, "*.jpg")))):
+    img_paths = sorted(glob.glob(os.path.join(video, "*.jpg")))
+    sort_nicely(img_paths)
+    for k, f in enumerate(img_paths):
         print("Processing Frame {}".format(k))
         img = dlib.load_rgb_image(f)
 
@@ -93,8 +95,6 @@ if __name__ == '__main__':
 
     annots, videos = get_data_lists(data)
 
-    outputs = []
-
     total_time = 0.0
     total_frames = 0
 
@@ -106,7 +106,9 @@ if __name__ == '__main__':
         tracker = dlib.correlation_tracker()
         with open('dsst_output/' + video_name + '.txt', 'w') as out_file:
             print("Processing %s." % video_name)
-            for k, f in enumerate(sorted(glob.glob(os.path.join(video, "*.jpg")))):
+            img_paths = sorted(glob.glob(os.path.join(video, "*.jpg")))
+            sort_nicely(img_paths)
+            for k, f in enumerate(img_paths):
                 img = dlib.load_rgb_image(f)
                 if k == 0:
                     # Start a track on the juice box. If you look at the first frame you
